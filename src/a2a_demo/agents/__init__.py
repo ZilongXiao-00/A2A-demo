@@ -1,2 +1,1 @@
-"""Runnable A2A agent examples."""
-
+"""可直接启动的 A2A Agent 示例。"""

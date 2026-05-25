@@ -1,2 +1,1 @@
-"""A lightweight A2A demo package."""
-
+"""轻量级 A2A 示例项目包。"""

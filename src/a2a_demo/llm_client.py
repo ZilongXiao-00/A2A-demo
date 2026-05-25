@@ -11,11 +11,11 @@ CONFIG_PATH = PROJECT_ROOT / "config.json"
 
 
 class LLMConfigError(RuntimeError):
-    """Raised when the local LLM configuration is missing or incomplete."""
+    """本地 LLM 配置缺失或不完整时抛出。"""
 
 
 def load_llm_config() -> dict[str, str]:
-    """Load OpenAI-compatible LLM settings from env vars or config.json."""
+    """从环境变量或 config.json 读取 OpenAI-compatible LLM 配置。"""
     config: dict[str, str] = {}
     if CONFIG_PATH.exists():
         with CONFIG_PATH.open("r", encoding="utf-8") as f:
@@ -50,7 +50,7 @@ def call_llm(
     tools: list[dict[str, Any]] | None = None,
     top_p: float = 0.9,
 ) -> str:
-    """Call any OpenAI-compatible chat completions API."""
+    """调用任意兼容 OpenAI Chat Completions 的 LLM 接口。"""
     config = load_llm_config()
     client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
     kwargs: dict[str, Any] = {
@@ -67,4 +67,3 @@ def call_llm(
 
     response = client.chat.completions.create(**kwargs)
     return response.choices[0].message.content or ""
-

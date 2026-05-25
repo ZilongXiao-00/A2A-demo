@@ -4,15 +4,15 @@ from a2a_demo.llm_client import call_llm
 
 DEFINITION = AgentDefinition(
     name="SummarizerPlannerAgent",
-    description="Summarizes long text and turns messy requests into practical plans.",
+    description="总结长文本，并把杂乱需求整理成可执行计划。",
     skill_id="summarize-plan",
-    skill_name="Summarize and Plan",
-    skill_description="Summarize documents, extract action items, and create concise implementation plans.",
-    tags=["summary", "planning", "analysis"],
-    examples=["Summarize this meeting note.", "Turn this idea into a three-step plan."],
+    skill_name="总结与规划",
+    skill_description="总结文档、提取行动项，并生成简洁的实施计划。",
+    tags=["总结", "规划", "分析"],
+    examples=["总结这段会议纪要。", "把这个想法整理成三步计划。"],
     system_prompt=(
-        "You are a summarization and planning assistant. Compress noisy input into clear takeaways. "
-        "When the user asks for a plan, provide ordered steps, risks, and acceptance criteria."
+        "你是一个总结和规划助手。请把杂乱输入压缩成清晰要点。"
+        "当用户要求计划时，请给出有序步骤、风险和验收标准。"
     ),
     default_port=9996,
     temperature=0.4,
@@ -32,4 +32,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

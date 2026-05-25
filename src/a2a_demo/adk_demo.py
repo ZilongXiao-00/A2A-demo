@@ -13,10 +13,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="__main__"
 
 
 DEFAULT_AGENTS = [
-    ("math_agent", 9999, "Remote A2A math agent"),
-    ("code_agent", 9998, "Remote A2A coding agent"),
-    ("translator_agent", 9997, "Remote A2A translation agent"),
-    ("summarizer_agent", 9996, "Remote A2A summarization and planning agent"),
+    ("math_agent", 9999, "远程 A2A 数学 Agent"),
+    ("code_agent", 9998, "远程 A2A 编程 Agent"),
+    ("translator_agent", 9997, "远程 A2A 翻译 Agent"),
+    ("summarizer_agent", 9996, "远程 A2A 总结和规划 Agent"),
 ]
 
 
@@ -29,14 +29,14 @@ async def run(prompt: str, host: str) -> list[str]:
             description=description,
         )
         remote_agents.append(agent)
-        print(f"[OK] {name} initialized on port {port}")
+        print(f"[OK] {name} 已在端口 {port} 初始化")
 
     root_agent = SequentialAgent(
         name="root_agent",
-        description="Run several remote A2A agents in sequence.",
+        description="按顺序运行多个远程 A2A Agent。",
         sub_agents=remote_agents,
     )
-    print(f"[OK] {root_agent.name} initialized")
+    print(f"[OK] {root_agent.name} 已初始化")
 
     runner = InMemoryRunner(root_agent)
     events = await runner.run_debug(prompt, quiet=True)
@@ -50,21 +50,20 @@ async def run(prompt: str, host: str) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the ADK remote A2A demo.")
+    parser = argparse.ArgumentParser(description="运行 ADK 远程 A2A 多 Agent 示例。")
     parser.add_argument("--host", default="localhost")
     parser.add_argument(
         "--prompt",
         default=(
-            "First calculate sqrt(5), then write Python code for it, translate the final "
-            "answer into Chinese, and summarize the result."
+            "先计算根号 5，再写出对应 Python 代码，然后把最终答案翻译成中文，最后总结结果。"
         ),
     )
     args = parser.parse_args()
 
     responses = asyncio.run(run(args.prompt, args.host))
-    print("\nFinal ADK Response")
+    print("\n最终 ADK 响应")
     print("-" * 18)
-    print("\n\n".join(responses) if responses else "No final text response received.")
+    print("\n\n".join(responses) if responses else "没有收到最终文本响应。")
 
 
 if __name__ == "__main__":

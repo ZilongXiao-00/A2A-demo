@@ -92,7 +92,7 @@ def build_app(
 
 
 def run_agent(definition: AgentDefinition, llm_caller: Callable[[str, str, float], str]) -> None:
-    parser = argparse.ArgumentParser(description=f"Run {definition.name}.")
+    parser = argparse.ArgumentParser(description=f"启动 {definition.name}。")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=definition.default_port)
     args = parser.parse_args()

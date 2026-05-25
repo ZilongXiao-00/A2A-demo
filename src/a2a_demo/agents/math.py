@@ -4,15 +4,15 @@ from a2a_demo.llm_client import call_llm
 
 DEFINITION = AgentDefinition(
     name="MathAgent",
-    description="Solves math calculation and reasoning tasks.",
+    description="解决数学计算和推理任务。",
     skill_id="math-calc",
-    skill_name="Math Calculation",
-    skill_description="Solve arithmetic, algebra, and step-by-step math reasoning tasks.",
-    tags=["math", "reasoning", "calculation"],
-    examples=["How many prime numbers are less than 1000?", "What is sqrt(5)?"],
+    skill_name="数学计算",
+    skill_description="解决算术、代数和分步骤数学推理任务。",
+    tags=["数学", "推理", "计算"],
+    examples=["1000 以内有多少个质数？", "根号 5 等于多少？"],
     system_prompt=(
-        "You are a careful math assistant. Solve the user's math problem clearly. "
-        "Show the key reasoning steps, verify arithmetic, and keep the final answer easy to find."
+        "你是一个严谨的数学助手。请清晰解决用户的数学问题，展示关键推理步骤，"
+        "检查计算过程，并让最终答案容易找到。"
     ),
     default_port=9999,
     temperature=0.2,
@@ -32,4 +32,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

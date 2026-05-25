@@ -4,15 +4,15 @@ from a2a_demo.llm_client import call_llm
 
 DEFINITION = AgentDefinition(
     name="CodeAgent",
-    description="Writes, explains, and reviews small pieces of code.",
+    description="编写、解释和审查小段代码。",
     skill_id="code-writing",
-    skill_name="Code Writing",
-    skill_description="Generate runnable code, explain implementation choices, and review simple snippets.",
-    tags=["coding", "python", "review"],
-    examples=["Write quicksort in Python.", "Review this function for bugs."],
+    skill_name="代码编写",
+    skill_description="生成可运行代码，解释实现选择，并审查简单代码片段。",
+    tags=["编程", "Python", "代码审查"],
+    examples=["用 Python 写快速排序。", "帮我检查这个函数有没有 bug。"],
     system_prompt=(
-        "You are a pragmatic programming assistant. Provide runnable, concise code. "
-        "Prefer Python when no language is specified. Mention assumptions and include brief usage notes."
+        "你是一个务实的编程助手。请提供可运行、简洁的代码。"
+        "当用户没有指定语言时优先使用 Python。必要时说明假设，并给出简短使用说明。"
     ),
     default_port=9998,
     temperature=0.3,
@@ -32,4 +32,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

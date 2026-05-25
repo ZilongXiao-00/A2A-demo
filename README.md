@@ -23,6 +23,149 @@
         └── summarizer.py    # 总结/规划 Agent，默认端口 9996
 ```
 
+## A2A 通信总览
+
+A2A 的核心思想是：调用方不直接调用另一个 Agent 的内部函数，而是通过标准协议先发现 Agent，再向它发送任务。
+
+```mermaid
+sequenceDiagram
+    participant Client as A2A Client / RemoteA2aAgent
+    participant Card as Agent Card endpoint
+    participant Server as A2A Server
+    participant Agent as Local Agent
+    participant LLM as OpenAI-compatible LLM
+
+    Client->>Card: GET /.well-known/agent.json
+    Card-->>Client: 返回 AgentCard JSON
+    Client->>Server: POST / 发送 A2A message/task
+    Server->>Agent: AgentExecutor 取出用户输入
+    Agent->>LLM: 调用 chat completions
+    LLM-->>Agent: 返回文本结果
+    Agent-->>Server: 返回本地执行结果
+    Server-->>Client: 返回 A2A message/artifact
+```
+
+可以把它理解成两步：
+
+1. **发现**：`GET /.well-known/agent.json`，拿到 Agent 的公开名片。
+2. **调用**：`POST /`，把 query 包装成 A2A message/task 发给 Agent。
+
+项目里的 `client.py` 和 ADK 的 `RemoteA2aAgent` 都已经封装了这些 HTTP 细节，所以通常不需要手写 JSON-RPC 请求。
+
+## DEFINITION、AgentCard 和 agent.json 的关系
+
+一个常见误解是：启动 Agent 后，外部通过 GET 拿到 `DEFINITION`，然后 `agent_server.py` 再拼 Agent Card。
+
+实际时序不是这样。更准确的流程是：
+
+```text
+启动某个 Agent 模块
+    ↓
+该模块把内部 Python 对象 DEFINITION 传给 agent_server.py
+    ↓
+agent_server.py 用 DEFINITION 拼出 AgentSkill 和 AgentCard
+    ↓
+A2AStarletteApplication 注册标准 HTTP 路由
+    ↓
+外部 GET /.well-known/agent.json 时，拿到的是 AgentCard 的 JSON
+```
+
+也就是说：
+
+- `DEFINITION` 是项目内部的 Python 配置对象。
+- `AgentCard` 是 A2A 协议对外公开的 Agent 名片。
+- `/.well-known/agent.json` 是这个公开名片的 HTTP 访问地址。
+
+以数学 Agent 为例，`src/a2a_demo/agents/math.py` 中定义了：
+
+```python
+DEFINITION = AgentDefinition(
+    name="MathAgent",
+    description="解决数学计算和推理任务。",
+    skill_id="math-calc",
+    skill_name="数学计算",
+    skill_description="解决算术、代数和分步骤数学推理任务。",
+    tags=["数学", "推理", "计算"],
+    examples=["1000 以内有多少个质数？", "根号 5 等于多少？"],
+    system_prompt="...",
+    default_port=9999,
+)
+```
+
+这里的字段会被 `src/a2a_demo/agent_server.py` 的 `build_app()` 转成 A2A SDK 对象：
+
+```python
+skill = AgentSkill(
+    id=definition.skill_id,
+    name=definition.skill_name,
+    description=definition.skill_description,
+    tags=definition.tags,
+    examples=definition.examples,
+)
+
+agent_card = AgentCard(
+    name=definition.name,
+    description=definition.description,
+    url=f"http://{host}:{port}/",
+    version="1.0.0",
+    default_input_modes=["text"],
+    default_output_modes=["text"],
+    capabilities=AgentCapabilities(streaming=False),
+    skills=[skill],
+)
+```
+
+所以 `DEFINITION.description` 会进入 Agent Card 顶层的 `description`；`skill_name`、`skill_description`、`tags`、`examples` 会进入 Agent Card 的 `skills` 列表。
+
+随后这段代码把 Agent Card 交给 A2A SDK：
+
+```python
+server = A2AStarletteApplication(
+    agent_card=agent_card,
+    http_handler=request_handler,
+)
+return server.build()
+```
+
+`A2AStarletteApplication` 会自动暴露标准发现地址：
+
+```text
+GET /.well-known/agent.json
+```
+
+因此启动数学 Agent 后，访问：
+
+```text
+http://localhost:9999/.well-known/agent.json
+```
+
+你看到的不是原始 `DEFINITION`，而是由它拼出来的 Agent Card JSON，大致结构如下：
+
+```json
+{
+  "name": "MathAgent",
+  "description": "解决数学计算和推理任务。",
+  "url": "http://localhost:9999/",
+  "version": "1.0.0",
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "capabilities": {
+    "streaming": false
+  },
+  "skills": [
+    {
+      "id": "math-calc",
+      "name": "数学计算",
+      "description": "解决算术、代数和分步骤数学推理任务。",
+      "tags": ["数学", "推理", "计算"],
+      "examples": ["1000 以内有多少个质数？", "根号 5 等于多少？"]
+    }
+  ]
+}
+```
+
+注意：Python 代码里是 `default_input_modes`，JSON 里可能显示为 `defaultInputModes`。这是 A2A SDK 的序列化行为。
+
 ## 从 0 开始运行
 
 ### 1. 创建环境
@@ -139,12 +282,20 @@ python -m a2a_demo.client --port 9996 --prompt "把这个任务拆成三步：�
 直接调用单个 Agent 的过程是：
 
 1. `client.py` 根据 `--host` 和 `--port` 连接远程 A2A Server。
-2. `ClientFactory.connect()` 会读取该服务暴露的 Agent Card。
+2. `ClientFactory.connect()` 读取该服务暴露的 Agent Card。
 3. `create_text_message_object()` 把你的 `--prompt` 封装成 A2A 消息。
-4. `client.send_message()` 把消息发给对应 Agent 服务。
+4. `client.send_message()` 把消息 POST 给 Agent Card 里的 `url`。
 5. Agent 服务中的 `AgentExecutor.execute()` 取出用户输入，调用本地 Agent 逻辑。
 6. 本地 Agent 通过 `llm_client.call_llm()` 调用配置好的 LLM。
 7. 服务把 LLM 输出封装成 A2A message/artifact 返回给客户端。
+
+一句话总结：
+
+```text
+GET /.well-known/agent.json 是发现 Agent。
+POST / 是调用 Agent。
+client.send_message() 封装了 POST 调用细节。
+```
 
 ## 使用 ADK 调用四个服务
 
@@ -201,7 +352,7 @@ http://localhost:9997/.well-known/agent.json
 http://localhost:9996/.well-known/agent.json
 ```
 
-读到 Agent Card 后，ADK 就知道每个远程 Agent 的名称、描述、输入输出模式、技能和服务地址。然后 `SequentialAgent` 会把用户输入交给第一个远程 Agent，再把执行过程中的结果继续交给后续远程 Agent。
+读到 Agent Card 后，ADK 就知道每个远程 Agent 的名称、描述、输入输出模式、技能和服务地址。之后 `SequentialAgent` 会按 `sub_agents` 的顺序调用这些远程 Agent。
 
 ### 哪一步决定调用哪个 Agent
 
@@ -215,70 +366,9 @@ root_agent = SequentialAgent(
 )
 ```
 
-`remote_agents` 来自 `DEFAULT_AGENTS`。因为使用的是 `SequentialAgent`，所以调用策略是固定顺序调用，不会根据意图动态选择。如果你只想调用某一个 Agent，可以直接用 `client.py` 指定端口；如果你想让模型根据任务自动选择 Agent，需要把 `SequentialAgent` 换成带路由能力的编排方式，例如自己写一个 router agent，根据用户意图选择目标端口或目标 `RemoteA2aAgent`。
+`remote_agents` 来自 `DEFAULT_AGENTS`。因为使用的是 `SequentialAgent`，所以调用策略是固定顺序调用，不会根据意图动态选择。
 
-## Agent Card 在哪里
-
-Agent Card 不是手写 JSON 文件，而是在服务启动时由代码动态生成。
-
-每个 Agent 模块都会定义一个 `DEFINITION`，例如数学 Agent 在 `src/a2a_demo/agents/math.py`：
-
-```python
-DEFINITION = AgentDefinition(
-    name="MathAgent",
-    description="解决数学计算和推理任务。",
-    skill_id="math-calc",
-    skill_name="数学计算",
-    skill_description="解决算术、代数和分步骤数学推理任务。",
-    tags=["数学", "推理", "计算"],
-    examples=["1000 以内有多少个质数？", "根号 5 等于多少？"],
-    system_prompt="...",
-    default_port=9999,
-)
-```
-
-通用封装在 `src/a2a_demo/agent_server.py` 的 `build_app()` 函数中。它会把 `AgentDefinition` 转换成 A2A SDK 的 `AgentSkill` 和 `AgentCard`：
-
-```python
-skill = AgentSkill(
-    id=definition.skill_id,
-    name=definition.skill_name,
-    description=definition.skill_description,
-    tags=definition.tags,
-    examples=definition.examples,
-)
-
-agent_card = AgentCard(
-    name=definition.name,
-    description=definition.description,
-    url=f"http://{host}:{port}/",
-    version="1.0.0",
-    default_input_modes=["text"],
-    default_output_modes=["text"],
-    capabilities=AgentCapabilities(streaming=False),
-    skills=[skill],
-)
-```
-
-随后 `A2AStarletteApplication` 会把这个 `agent_card` 暴露为标准发现地址：
-
-```text
-GET /.well-known/agent.json
-```
-
-所以当你启动数学 Agent 后，可以直接打开：
-
-```text
-http://localhost:9999/.well-known/agent.json
-```
-
-启动其他 Agent 后，也可以分别查看：
-
-```text
-http://localhost:9998/.well-known/agent.json
-http://localhost:9997/.well-known/agent.json
-http://localhost:9996/.well-known/agent.json
-```
+如果你只想调用某一个 Agent，可以直接用 `client.py` 指定端口。如果你想让模型根据任务自动选择 Agent，需要把 `SequentialAgent` 换成带路由能力的编排方式，例如自己写一个 router agent，根据用户意图选择目标端口或目标 `RemoteA2aAgent`。
 
 ## A2A Server 是如何包装已有 Agent 的
 
